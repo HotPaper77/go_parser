@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"time"
 )
 
 var (
@@ -57,6 +58,8 @@ func Visit(path string, d fs.DirEntry, err error) error {
 
 func main() {
 
+	start := time.Now()
+
 	sourceDir = os.Args[1]
 
 	log.Println(sourceDir)
@@ -103,7 +106,9 @@ func main() {
 
 	wg.Wait()
 
-	log.Println("Parsing Completed!")
+	executionTime := time.Since(start)
+
+	log.Printf("Parsing Completed!\n Execution Time:%9.2f min\n", executionTime.Seconds())
 
 }
 
