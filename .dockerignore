@@ -1,0 +1,8 @@
+samples/
+go_parser
+dockerfile
+output.txt
+.dockerignore
+.git
+.gitignore
+test.sh
