@@ -59,15 +59,17 @@ func main() {
 
 	sourceDir = os.Args[1]
 
-	log.Printf("Input Directory Path: %s\n", sourceDir)
+	log.Println(sourceDir)
 
 	absPath, err := filepath.Abs(sourceDir)
+
+	log.Printf("Input Directory Path: %s.\n Workers:%d\n", sourceDir, maxWorkers)
 
 	if err != nil {
 		panic(err)
 	}
 
-	incoming = make(chan Task, 200)
+	incoming = make(chan Task, 50)
 
 	done = make(chan Task, 200)
 
