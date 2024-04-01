@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/csv"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -16,7 +18,7 @@ import (
 )
 
 const (
-	outputFilename = "count_output.txt"
+	outputFilename = "count_output.csv"
 )
 
 var (
@@ -47,7 +49,7 @@ type parseError struct {
 }
 
 func (e *parseError) Error() string {
-	errorMessage := fmt.Sprintf("could not parse record line %d. error:%v\n", e.line, e.err)
+	errorMessage := fmt.Sprintf("could not parse record line %d. error:%v", e.line, e.err)
 	return errorMessage
 }
 
@@ -86,7 +88,7 @@ func worker(incoming chan Task, done chan Task) {
 		err := process(t.path, &t)
 
 		if err != nil {
-			fmt.Printf("Could not process file %s. Error: %v", t.path, err)
+			fmt.Printf("Could not process file %s. Error: %v\n", t.path, err)
 		}
 
 		done <- t
@@ -209,6 +211,25 @@ func process(path string, t *Task) error {
 		return err
 	}
 
+	tempReader := bufio.NewReader(fd)
+
+	bom, _ := tempReader.Peek(3)
+
+	bomHex, err := hex.DecodeString("EFBBBF")
+
+	if err != nil {
+		panic(err)
+	}
+
+	if bytes.Equal(bom, bomHex) {
+		log.Printf("Detected UTF-8 BOM for %s", path)
+		_, err := fd.Seek(3, 0)
+
+		if err != nil {
+			return err
+		}
+	}
+
 	r := csv.NewReader(fd)
 
 	records, err := r.ReadAll()
@@ -236,7 +257,6 @@ func process(path string, t *Task) error {
 			outOfStock    int
 		}
 		if indexColumnStore, ok := headerMap[storeColumnName]; ok {
-
 			store_id = record[indexColumnStore]
 		} else {
 			newError := noStoresColumn{}
