@@ -38,6 +38,7 @@ type Task struct {
 type summary map[string]struct {
 	totalProducts int
 	inStock       int
+	outOfStock    int
 }
 
 type parseError struct {
@@ -70,7 +71,7 @@ func (noStoresColumn) Error() string {
 func (t *Task) Write(w *bufio.Writer) {
 
 	for store, data := range t.result {
-		message := fmt.Sprintf("%s,%s,%d,%d\n", t.path, store, data.totalProducts, data.inStock)
+		message := fmt.Sprintf("%s,%s,%d,%d,%d\n", t.path, store, data.inStock, data.outOfStock, data.totalProducts)
 		_, err := w.WriteString(message)
 
 		if err != nil {
@@ -145,6 +146,14 @@ func main() {
 
 	writer := bufio.NewWriter(file)
 
+	outputFileHeader := "filepath,store_id,inStock,outOfStock,totalProducts\n"
+
+	_, err = writer.WriteString(outputFileHeader)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	defer writer.Flush()
 
 	wg.Add(1)
@@ -189,6 +198,7 @@ func process(path string, t *Task) error {
 	storesSummary := make(map[string]struct {
 		totalProducts int
 		inStock       int
+		outOfStock    int
 	})
 
 	t.result = storesSummary
@@ -210,7 +220,8 @@ func process(path string, t *Task) error {
 		t.result["NAN"] = struct {
 			totalProducts int
 			inStock       int
-		}{0, 0}
+			outOfStock    int
+		}{0, 0, 0}
 		return nil
 	}
 
@@ -222,6 +233,7 @@ func process(path string, t *Task) error {
 		var storeInfo struct {
 			totalProducts int
 			inStock       int
+			outOfStock    int
 		}
 		if indexColumnStore, ok := headerMap[storeColumnName]; ok {
 
@@ -236,7 +248,8 @@ func process(path string, t *Task) error {
 			storeInfo = struct {
 				totalProducts int
 				inStock       int
-			}{0, 0}
+				outOfStock    int
+			}{0, 0, 0}
 
 			t.result[store_id] = storeInfo
 		} else {
@@ -253,6 +266,8 @@ func process(path string, t *Task) error {
 
 			if stockValue > 0 {
 				storeInfo.inStock++
+			} else if stockValue <= 0 {
+				storeInfo.outOfStock++
 			}
 
 		} else {
