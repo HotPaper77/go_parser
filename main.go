@@ -211,9 +211,9 @@ func process(path string, t *Task) error {
 		return err
 	}
 
-	tempReader := bufio.NewReader(fd)
+	br := bufio.NewReader(fd)
 
-	bom, _ := tempReader.Peek(3)
+	bom, _ := br.Peek(3)
 
 	bomHex, err := hex.DecodeString("EFBBBF")
 
@@ -222,15 +222,14 @@ func process(path string, t *Task) error {
 	}
 
 	if bytes.Equal(bom, bomHex) {
-		log.Printf("Detected UTF-8 BOM for %s", path)
-		_, err := fd.Seek(3, 0)
+		_, err := br.Discard(3)
 
 		if err != nil {
 			return err
 		}
 	}
 
-	r := csv.NewReader(fd)
+	r := csv.NewReader(br)
 
 	records, err := r.ReadAll()
 
