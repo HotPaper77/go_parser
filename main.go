@@ -22,6 +22,7 @@ const (
 var (
 	maxWorkers      = runtime.NumCPU()
 	stockColumnName string
+	storeColumnName string
 	sourceDir       string
 	incoming        chan Task
 	done            chan Task
@@ -30,7 +31,11 @@ var (
 )
 
 type Task struct {
-	path          string
+	path   string
+	result summary
+}
+
+type summary map[string]struct {
 	totalProducts int
 	inStock       int
 }
@@ -48,17 +53,29 @@ func (e *parseError) Error() string {
 type noStockColumn struct{}
 
 func (e *noStockColumn) Error() string {
-	errorMessage := fmt.Sprintln("column stock not present in file")
+	errorMessage := fmt.Sprintf("column %s not present in file", stockColumnName)
+	return errorMessage
+}
+
+type noStoresColumn struct {
+}
+
+func (noStoresColumn) Error() string {
+
+	errorMessage := fmt.Sprintf("column %s not present in file", storeColumnName)
+
 	return errorMessage
 }
 
 func (t *Task) Write(w *bufio.Writer) {
-	message := fmt.Sprintf("%s,%d,%d\n", t.path, t.totalProducts, t.inStock)
 
-	_, err := w.WriteString(message)
+	for store, data := range t.result {
+		message := fmt.Sprintf("%s,%s,%d,%d\n", t.path, store, data.totalProducts, data.inStock)
+		_, err := w.WriteString(message)
 
-	if err != nil {
-		log.Fatal(err)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -94,6 +111,8 @@ func Visit(path string, d fs.DirEntry, err error) error {
 
 func init() {
 	flag.StringVar(&stockColumnName, "stock", "stock", "enter the name of the column stock. default is 'stock'")
+	flag.StringVar(&storeColumnName, "store_id", "store_id", "enter the name of the column store_id. default is 'store_id'")
+
 }
 
 func main() {
@@ -167,7 +186,12 @@ func main() {
 
 func process(path string, t *Task) error {
 
-	inStockCount := 0
+	storesSummary := make(map[string]struct {
+		totalProducts int
+		inStock       int
+	})
+
+	t.result = storesSummary
 
 	fd, err := os.Open(path)
 
@@ -182,8 +206,11 @@ func process(path string, t *Task) error {
 	if err != nil {
 		return err
 	} else if len(records) == 0 {
-		t.totalProducts = 0
-		t.inStock = 0
+		// if there are no records in a given file create a dummy store 'NAN' and assign null values
+		t.result["NAN"] = struct {
+			totalProducts int
+			inStock       int
+		}{0, 0}
 		return nil
 	}
 
@@ -191,7 +218,30 @@ func process(path string, t *Task) error {
 	headerMap := mapHeader(header)
 
 	for i, record := range records[1:] {
+		var store_id string
+		var storeInfo struct {
+			totalProducts int
+			inStock       int
+		}
+		if indexColumnStore, ok := headerMap[storeColumnName]; ok {
 
+			store_id = record[indexColumnStore]
+		} else {
+			newError := noStoresColumn{}
+			return &newError
+		}
+
+		if summary, ok := t.result[store_id]; !ok {
+
+			storeInfo = struct {
+				totalProducts int
+				inStock       int
+			}{0, 0}
+
+			t.result[store_id] = storeInfo
+		} else {
+			storeInfo = summary
+		}
 		if indexColumnStock, ok := headerMap[stockColumnName]; ok {
 
 			stockValue, err := strconv.ParseFloat(record[indexColumnStock], 32)
@@ -202,17 +252,16 @@ func process(path string, t *Task) error {
 			}
 
 			if stockValue > 0 {
-				inStockCount++
+				storeInfo.inStock++
 			}
 
 		} else {
 			newError := noStockColumn{}
 			return &newError
 		}
-
+		storeInfo.totalProducts++
+		t.result[store_id] = storeInfo
 	}
-	t.totalProducts = len(records) - 1
-	t.inStock = inStockCount
 
 	return nil
 }
